@@ -1,8 +1,7 @@
-
-import React, { useEffect, useRef } from 'react';
-import { Animated, Text, View } from 'react-native';
-import { ToastMessageProps } from '../../types';
-import styles from './styles';
+import React, { useEffect, useRef } from "react";
+import { Animated, Text } from "react-native";
+import { ToastMessageProps } from "../../types";
+import styles from "./styles";
 
 const ToastMessage: React.FC<ToastMessageProps> = ({ visible, message }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -23,7 +22,7 @@ const ToastMessage: React.FC<ToastMessageProps> = ({ visible, message }) => {
     }
   }, [visible, fadeAnim]);
 
-  if (!visible && fadeAnim._value === 0) {
+  if (!visible) {
     return null;
   }
 

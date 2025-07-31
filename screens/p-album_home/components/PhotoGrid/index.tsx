@@ -1,38 +1,72 @@
-
-import React, { useState } from 'react';
-import { View, Image, Text, TouchableOpacity, Alert } from 'react-native';
-import styles from './styles';
-import PhotoItem from '../PhotoItem';
+import React, { useState, useEffect } from "react";
+import { View, FlatList, ActivityIndicator, Text } from "react-native";
+import { useAppDispatch, useAppSelector } from "../../../../store/hooks";
+import {
+  Photo,
+  removeMultiplePhotos,
+} from "../../../../store/slices/photosSlice";
+import styles from "./styles";
+import PhotoItem from "../PhotoItem";
+import DeleteActionBar from "../DeleteActionBar";
+import DeleteToast from "../DeleteToast";
 
 interface PhotoGridProps {
   onPhotoPress: (photoId: string) => void;
 }
 
 const PhotoGrid = ({ onPhotoPress }: PhotoGridProps) => {
+  const dispatch = useAppDispatch();
+  const photos = useAppSelector((state) => state.photos.photos);
+  const loading = useAppSelector((state) => state.photos.loading);
+  const error = useAppSelector((state) => state.photos.error);
+
+  // 强制重新渲染
+  const [forceUpdate, setForceUpdate] = useState(0);
+  useEffect(() => {
+    if (photos.length > 0) {
+      setForceUpdate((prev) => prev + 1);
+    }
+  }, [photos.length]);
+
+  // 调试信息
+  console.log(
+    `PhotoGrid - 照片数量: ${photos.length}, 加载状态: ${loading}, 错误: ${error}`
+  );
+  console.log(
+    "PhotoGrid - 照片列表:",
+    photos.map((p) => ({ id: p.id, name: p.name }))
+  );
+
+  // 强制重新渲染的key
+  const renderKey = React.useMemo(() => {
+    return `photos-${photos.length}-${photos
+      .map((p) => p.id)
+      .join("-")}-${forceUpdate}`;
+  }, [photos, forceUpdate]);
+
+  // 监听photos数组变化
+  useEffect(() => {
+    console.log("PhotoGrid - photos数组发生变化，数量:", photos.length);
+    console.log(
+      "PhotoGrid - 最新照片:",
+      photos[photos.length - 1]?.name || "无"
+    );
+    console.log(
+      "PhotoGrid - 所有照片:",
+      photos.map((p) => p.name)
+    );
+  }, [photos]);
+
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-
-  // Mock photo data
-  const photos = [
-    { id: '1', uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4', caption: '"山间静谧"' },
-    { id: '2', uri: 'https://images.unsplash.com/photo-1501594907352-04cda38ebc29', caption: '"海天一色"' },
-    { id: '3', uri: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e', caption: '"绿意盎然"' },
-    { id: '4', uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4', caption: '"云雾缭绕"' },
-    { id: '5', uri: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e', caption: '"秋日暖阳"' },
-    { id: '6', uri: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e', caption: '"林间小道"' },
-    { id: '7', uri: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4', caption: '"山峦叠嶂"' },
-    { id: '8', uri: 'https://images.unsplash.com/photo-1501594907352-04cda38ebc29', caption: '"碧海蓝天"' },
-    { id: '9', uri: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e', caption: '"山水如画"' },
-    { id: '10', uri: 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e', caption: '"金秋时节"' },
-    { id: '11', uri: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e', caption: '"森林深处"' },
-    { id: '12', uri: '', caption: '', isLoading: true },
-  ];
+  const [showDeleteToast, setShowDeleteToast] = useState(false);
+  const [deleteToastMessage, setDeleteToastMessage] = useState("");
 
   const handlePhotoPress = (photoId: string) => {
     if (isMultiSelectMode) {
       // In multi-select mode, toggle selection
       if (selectedPhotos.includes(photoId)) {
-        setSelectedPhotos(selectedPhotos.filter(id => id !== photoId));
+        setSelectedPhotos(selectedPhotos.filter((id) => id !== photoId));
       } else {
         setSelectedPhotos([...selectedPhotos, photoId]);
       }
@@ -49,36 +83,130 @@ const PhotoGrid = ({ onPhotoPress }: PhotoGridProps) => {
     }
   };
 
-  const renderPhotoRow = (startIndex: number) => {
+  const handleCancelSelection = () => {
+    setIsMultiSelectMode(false);
+    setSelectedPhotos([]);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedPhotos.length > 0) {
+      console.log(
+        `PhotoGrid - 准备删除照片，选中数量: ${selectedPhotos.length}`
+      );
+      dispatch(removeMultiplePhotos(selectedPhotos));
+      setDeleteToastMessage(`已删除 ${selectedPhotos.length} 张照片`);
+      setShowDeleteToast(true);
+      setIsMultiSelectMode(false);
+      setSelectedPhotos([]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPhotos.length === photos.length) {
+      // 如果全选了，则取消全选
+      setSelectedPhotos([]);
+    } else {
+      // 否则全选
+      setSelectedPhotos(photos.map((photo) => photo.id));
+    }
+  };
+
+  const isAllSelected =
+    selectedPhotos.length === photos.length && photos.length > 0;
+
+  const renderPhotoRow = ({
+    item: rowPhotos,
+    index,
+  }: {
+    item: Photo[];
+    index: number;
+  }) => {
     return (
       <View style={styles.row}>
-        {[0, 1, 2].map(offset => {
-          const index = startIndex + offset;
-          if (index < photos.length) {
-            const photo = photos[index];
-            return (
-              <PhotoItem
-                key={photo.id}
-                photo={photo}
-                isSelected={selectedPhotos.includes(photo.id)}
-                isMultiSelectMode={isMultiSelectMode}
-                onPress={() => handlePhotoPress(photo.id)}
-                onLongPress={() => handleLongPress(photo.id)}
-              />
-            );
-          }
-          return <View key={`empty-${index}`} style={styles.emptyItem} />;
-        })}
+        {rowPhotos.map((photo) => (
+          <PhotoItem
+            key={photo.id}
+            photo={photo}
+            isSelected={selectedPhotos.includes(photo.id)}
+            isMultiSelectMode={isMultiSelectMode}
+            onPress={() => handlePhotoPress(photo.id)}
+            onLongPress={() => handleLongPress(photo.id)}
+          />
+        ))}
+        {/* 填充空位以保持3列布局 */}
+        {rowPhotos.length < 3 &&
+          Array.from({ length: 3 - rowPhotos.length }).map((_, i) => (
+            <View key={`empty-${index}-${i}`} style={styles.emptyItem} />
+          ))}
       </View>
     );
   };
 
+  // 将照片数据分组为3列布局
+  const groupedPhotos = React.useMemo(() => {
+    console.log("PhotoGrid - 重新计算groupedPhotos，照片数量:", photos.length);
+    const rows = [];
+    for (let i = 0; i < photos.length; i += 3) {
+      rows.push(photos.slice(i, i + 3));
+    }
+    return rows;
+  }, [photos]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#38BDF8" />
+        <Text style={styles.loadingText}>加载照片中...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>加载失败: {error}</Text>
+      </View>
+    );
+  }
+
+  if (photos.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>暂无照片</Text>
+        <Text style={styles.emptySubText}>点击右下角按钮导入照片</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      {renderPhotoRow(0)}
-      {renderPhotoRow(3)}
-      {renderPhotoRow(6)}
-      {renderPhotoRow(9)}
+    <View style={styles.container} key={renderKey}>
+      <FlatList
+        data={groupedPhotos}
+        renderItem={renderPhotoRow}
+        keyExtractor={(_, index) => `row-${index}-${photos.length}`}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 20 }]}
+        numColumns={1}
+        style={styles.flatList}
+        extraData={photos}
+        removeClippedSubviews={false}
+      />
+
+      {isMultiSelectMode && (
+        <DeleteActionBar
+          selectedCount={selectedPhotos.length}
+          onCancel={handleCancelSelection}
+          onDelete={handleDeleteSelected}
+          onSelectAll={handleSelectAll}
+          isAllSelected={isAllSelected}
+        />
+      )}
+
+      <DeleteToast
+        visible={showDeleteToast}
+        message={deleteToastMessage}
+        onHide={() => setShowDeleteToast(false)}
+      />
     </View>
   );
 };

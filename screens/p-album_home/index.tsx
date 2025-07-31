@@ -1,37 +1,32 @@
+import { View, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useState, useCallback } from "react";
+import { useAppDispatch } from "../../store/hooks";
+import { loadPhotosFromStorage } from "../../store/slices/photosSlice";
 
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  Image, 
-  TouchableOpacity, 
-  ScrollView,
-  Dimensions,
-  Platform
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { FontAwesome6 } from '@expo/vector-icons';
-import { Link, useRouter } from 'expo-router';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming 
-} from 'react-native-reanimated';
-
-import styles from './styles';
-import PhotoGrid from './components/PhotoGrid';
-import GroupsList from './components/GroupsList';
-import Header from './components/Header';
-import ViewTabs from './components/ViewTabs';
-import FloatingActionButton from './components/FloatingActionButton';
-import Watermark from './components/Watermark';
+import styles from "./styles";
+import PhotoGrid from "./components/PhotoGrid";
+import GroupsList from "./components/GroupsList";
+import Header from "./components/Header";
+import ViewTabs from "./components/ViewTabs";
+import FloatingActionButton from "./components/FloatingActionButton";
+import Watermark from "./components/Watermark";
 
 const AlbumHomeScreen = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'photos' | 'groups'>('photos');
-  const [isLoading, setIsLoading] = useState(false);
+  const dispatch = useAppDispatch();
+  const [activeTab, setActiveTab] = useState<"photos" | "groups">("photos");
 
-  const handleTabChange = (tab: 'photos' | 'groups') => {
+  // 在组件挂载时和每次进入页面时加载存储的照片
+  useFocusEffect(
+    useCallback(() => {
+      console.log("AlbumHomeScreen - 页面获得焦点，开始加载照片");
+      dispatch(loadPhotosFromStorage());
+    }, [dispatch])
+  );
+
+  const handleTabChange = (tab: "photos" | "groups") => {
     setActiveTab(tab);
   };
 
@@ -44,45 +39,42 @@ const AlbumHomeScreen = () => {
   };
 
   const handleImportPress = () => {
-    router.push('/p-import');
+    router.push("/p-import");
   };
 
   const handleSettingsPress = () => {
-    router.push('/p-settings');
+    router.push("/p-settings");
   };
 
   const handleSearchPress = () => {
     // Implement search functionality
-    console.log('Search pressed');
+    console.log("Search pressed");
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header 
-        title="PhotoInsight" 
+      <Header
+        title="PhotoInsight"
         onSearchPress={handleSearchPress}
         onSettingsPress={handleSettingsPress}
       />
-      
-      <ViewTabs 
-        activeTab={activeTab} 
-        onTabChange={handleTabChange} 
-      />
-      
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {activeTab === 'photos' ? (
-          <>
-            <Watermark text="每一张照片都是时光的诗句" />
-            <PhotoGrid onPhotoPress={handlePhotoPress} />
-          </>
-        ) : (
+
+      <ViewTabs activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {activeTab === "photos" ? (
+        <View style={styles.contentContainer}>
+          <Watermark text="每一张照片都是时光的诗句" />
+          <PhotoGrid onPhotoPress={handlePhotoPress} />
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false}
+        >
           <GroupsList onGroupPress={handleGroupPress} />
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       <FloatingActionButton onPress={handleImportPress} />
     </SafeAreaView>

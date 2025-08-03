@@ -3,6 +3,13 @@ import CryptoJS from "crypto-js";
 import { StorageService } from "../../utils/storageService";
 import { PhotoService } from "../../utils/photoService";
 
+export interface PhotoContent {
+  inspiration: string;
+  promotion: string;
+  tags: string[];
+  poem: string;
+}
+
 export interface Photo {
   id: string;
   uri: string;
@@ -14,6 +21,7 @@ export interface Photo {
   caption?: string;
   groupId?: string;
   createdAt: number;
+  aiContent?: PhotoContent;
 }
 
 interface PhotosState {
@@ -172,6 +180,44 @@ const photosSlice = createSlice({
       }
     },
 
+    updatePhotoContent: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        contentType: "inspiration" | "promotion" | "tags" | "poem";
+        content: string | string[];
+      }>
+    ) => {
+      const { id, contentType, content } = action.payload;
+      const photoIndex = state.photos.findIndex((photo) => photo.id === id);
+      if (photoIndex !== -1) {
+        const photo = state.photos[photoIndex];
+        const aiContent = photo.aiContent || {
+          inspiration: "",
+          promotion: "",
+          tags: [],
+          poem: "",
+        };
+
+        const updatedAiContent = {
+          ...aiContent,
+          [contentType]: content,
+        };
+
+        state.photos[photoIndex] = {
+          ...photo,
+          aiContent: updatedAiContent,
+        };
+
+        // 异步更新存储
+        StorageService.updatePhoto(id, { aiContent: updatedAiContent }).catch(
+          (error) => {
+            console.error("更新存储中的照片内容失败:", error);
+          }
+        );
+      }
+    },
+
     setPhotos: (state, action: PayloadAction<Photo[]>) => {
       state.photos = action.payload;
       // 异步保存到存储
@@ -229,6 +275,7 @@ export const {
   removePhoto,
   removeMultiplePhotos,
   updatePhoto,
+  updatePhotoContent,
   setPhotos,
   setLoading,
   setError,

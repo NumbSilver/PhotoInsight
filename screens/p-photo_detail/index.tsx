@@ -6,6 +6,7 @@ import {
   Modal,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -14,7 +15,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useAppSelector, useAppDispatch } from "../../store/hooks";
-import { removePhoto } from "../../store/slices/photosSlice";
+import {
+  removePhoto,
+  updatePhotoContent,
+} from "../../store/slices/photosSlice";
 import styles from "./styles";
 import ContentSection from "./components/ContentSection";
 import TagItem from "./components/TagItem";
@@ -41,6 +45,14 @@ const PhotoDetailScreen = () => {
     Record<string, boolean>
   >({});
 
+  // 编辑状态
+  const [editingContentType, setEditingContentType] =
+    useState<ContentType | null>(null);
+
+  // 标签编辑状态
+  const [isEditingTags, setIsEditingTags] = useState(false);
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -49,15 +61,18 @@ const PhotoDetailScreen = () => {
 
     if (realPhoto) {
       console.log("PhotoDetail - 使用真实照片:", realPhoto.name, realPhoto.uri);
-      // 使用真实照片数据，生成默认的AI内容
+
+      // 从Redux获取AI内容，如果没有则使用默认内容
+      const aiContent = realPhoto.aiContent || {
+        inspiration: `这张${realPhoto.name}展现了独特的视角和美感。`,
+        promotion: `这张名为${realPhoto.name}的照片，以其独特的构图和色彩搭配，为我们呈现了一个令人印象深刻的画面。无论是从技术角度还是艺术角度来看，这都是一张值得分享和收藏的作品。`,
+        tags: ["#摄影", "#艺术", "#生活", "#美好瞬间", "#视觉享受"],
+        poem: `光影交错间<br>定格了这一刻<br>${realPhoto.name}<br>诉说着故事<br><br>每一帧画面<br>都是时光的印记<br>让我们珍惜<br>这美好的瞬间`,
+      };
+
       const photoData: PhotoData = {
         url: realPhoto.uri,
-        content: {
-          inspiration: `这张${realPhoto.name}展现了独特的视角和美感。`,
-          promotion: `这张名为${realPhoto.name}的照片，以其独特的构图和色彩搭配，为我们呈现了一个令人印象深刻的画面。无论是从技术角度还是艺术角度来看，这都是一张值得分享和收藏的作品。`,
-          tags: ["#摄影", "#艺术", "#生活", "#美好瞬间", "#视觉享受"],
-          poem: `光影交错间<br>定格了这一刻<br>${realPhoto.name}<br>诉说着故事<br><br>每一帧画面<br>都是时光的印记<br>让我们珍惜<br>这美好的瞬间`,
-        },
+        content: aiContent,
       };
       setPhoto(photoData);
     } else {
@@ -92,7 +107,7 @@ const PhotoDetailScreen = () => {
     setIsRegenerating(true);
 
     setTimeout(() => {
-      if (photo) {
+      if (photo && realPhoto) {
         const availableIds = Object.keys(PHOTO_DATA).filter(
           (id) => id !== photoId
         );
@@ -104,18 +119,46 @@ const PhotoDetailScreen = () => {
 
         if (type === "inspiration" || type === "all") {
           updatedPhoto.content.inspiration = randomContent.inspiration;
+          dispatch(
+            updatePhotoContent({
+              id: realPhoto.id,
+              contentType: "inspiration",
+              content: randomContent.inspiration,
+            })
+          );
         }
 
         if (type === "promotion" || type === "all") {
           updatedPhoto.content.promotion = randomContent.promotion;
+          dispatch(
+            updatePhotoContent({
+              id: realPhoto.id,
+              contentType: "promotion",
+              content: randomContent.promotion,
+            })
+          );
         }
 
         if (type === "tags" || type === "all") {
           updatedPhoto.content.tags = [...randomContent.tags];
+          dispatch(
+            updatePhotoContent({
+              id: realPhoto.id,
+              contentType: "tags",
+              content: [...randomContent.tags],
+            })
+          );
         }
 
         if (type === "poem" || type === "all") {
           updatedPhoto.content.poem = randomContent.poem;
+          dispatch(
+            updatePhotoContent({
+              id: realPhoto.id,
+              contentType: "poem",
+              content: randomContent.poem,
+            })
+          );
         }
 
         setPhoto(updatedPhoto);
@@ -188,13 +231,60 @@ const PhotoDetailScreen = () => {
   };
 
   const handleEditContent = (type: ContentType) => {
-    showToast(`编辑${getContentTypeName(type)}`);
-    // 这里可以实现编辑功能的逻辑
+    setEditingContentType(type);
   };
 
   const handleEditTags = () => {
-    showToast("编辑社交媒体Tag");
-    // 这里可以实现编辑标签的逻辑
+    setIsEditingTags(true);
+    setEditingTags([...(photo?.content.tags || [])]);
+  };
+
+  const handleUpdateEditingTag = (index: number, value: string) => {
+    const newTags = [...editingTags];
+    newTags[index] = value;
+    setEditingTags(newTags);
+  };
+
+  const handleRemoveEditingTag = (index: number) => {
+    const newTags = editingTags.filter((_, i) => i !== index);
+    setEditingTags(newTags);
+  };
+
+  const handleAddEditingTag = () => {
+    setEditingTags([...editingTags, ""]);
+  };
+
+  const handleSaveTagsEdit = () => {
+    const validTags = editingTags.filter((tag) => tag.trim());
+    if (validTags.length > 0 && realPhoto) {
+      dispatch(
+        updatePhotoContent({
+          id: realPhoto.id,
+          contentType: "tags",
+          content: validTags,
+        })
+      );
+      setIsEditingTags(false);
+      showToast("社交媒体Tag已保存");
+    }
+  };
+
+  const handleCancelTagsEdit = () => {
+    setEditingTags([...(photo?.content.tags || [])]);
+    setIsEditingTags(false);
+  };
+
+  const handleSaveContent = (newContent: string) => {
+    if (realPhoto && editingContentType) {
+      dispatch(
+        updatePhotoContent({
+          id: realPhoto.id,
+          contentType: editingContentType,
+          content: newContent,
+        })
+      );
+      showToast(`${getContentTypeName(editingContentType)}已保存`);
+    }
   };
 
   const showToast = (message: string) => {
@@ -279,6 +369,7 @@ const PhotoDetailScreen = () => {
             onRegenerate={() => handleRegenerateContent("inspiration")}
             onCopy={() => handleCopyContent("inspiration")}
             onEdit={() => handleEditContent("inspiration")}
+            onSave={handleSaveContent}
           />
 
           <ContentSection
@@ -291,16 +382,76 @@ const PhotoDetailScreen = () => {
             onRegenerate={() => handleRegenerateContent("promotion")}
             onCopy={() => handleCopyContent("promotion")}
             onEdit={() => handleEditContent("promotion")}
+            onSave={handleSaveContent}
           />
 
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>社交媒体Tag</Text>
 
-            <View style={styles.tagsContainer}>
-              {photo.content.tags.map((tag, index) => (
-                <TagItem key={index} tag={tag} />
-              ))}
-            </View>
+            {isEditingTags ? (
+              <View style={styles.tagsEditContainer}>
+                <View style={styles.tagsEditInputs}>
+                  {editingTags.map((tag, index) => (
+                    <View key={index} style={styles.tagEditRow}>
+                      <TextInput
+                        style={styles.tagEditInput}
+                        value={tag}
+                        onChangeText={(value) =>
+                          handleUpdateEditingTag(index, value)
+                        }
+                        placeholder={`标签 ${index + 1}`}
+                        placeholderTextColor="#94A3B8"
+                        autoFocus={
+                          index === editingTags.length - 1 && tag === ""
+                        }
+                      />
+                      <TouchableOpacity
+                        style={styles.removeTagButton}
+                        onPress={() => handleRemoveEditingTag(index)}
+                        hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                      >
+                        <FontAwesome5 name="times" size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={styles.addTagButton}
+                  onPress={handleAddEditingTag}
+                  activeOpacity={0.7}
+                >
+                  <FontAwesome6
+                    name="plus"
+                    size={16}
+                    color="#38BDF8"
+                    style={styles.addTagIcon}
+                  />
+                  <Text style={styles.addTagText}>添加标签</Text>
+                </TouchableOpacity>
+                <View style={styles.tagsEditActions}>
+                  <TouchableOpacity
+                    style={styles.cancelTagsButton}
+                    onPress={handleCancelTagsEdit}
+                    activeOpacity={0.7}
+                  >
+                    <FontAwesome5 name="times" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.saveTagsButton}
+                    onPress={handleSaveTagsEdit}
+                    activeOpacity={0.7}
+                  >
+                    <FontAwesome5 name="check" size={16} color="#10B981" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.tagsContainer}>
+                {photo.content.tags.map((tag, index) => (
+                  <TagItem key={index} tag={tag} />
+                ))}
+              </View>
+            )}
 
             <View style={styles.actionContainer}>
               <View style={styles.feedbackButtons}>
@@ -344,6 +495,7 @@ const PhotoDetailScreen = () => {
             onRegenerate={() => handleRegenerateContent("poem")}
             onCopy={() => handleCopyContent("poem")}
             onEdit={() => handleEditContent("poem")}
+            onSave={handleSaveContent}
           />
         </View>
       </ScrollView>
